@@ -57,7 +57,7 @@ textarea{min-height:60px;resize:vertical}
   <div class="note" id="imsg"></div>
 </div>
 
-<div class="note">Táto stránka počas pracovnej doby odosiela tvoju polohu. Fotku a zvuk odošleš len keď sám stlačíš Odoslať.</div>
+<div class="note">Táto stránka počas pracovnej doby odosiela tvoju polohu. Fotku odošleš len keď sám stlačíš Odoslať.</div>
 
 <script>
 const token = location.pathname.split("/").pop();
@@ -177,33 +177,14 @@ document.getElementById("photo").onchange = (e) => {
   };
   img.src = url;
 };
-// hlasová poznámka
-document.getElementById("rec").onclick = async () => {
-  const btn = document.getElementById("rec");
-  if (rec && rec.state === "recording") { rec.stop(); return; }
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    rec = new MediaRecorder(stream); chunks = [];
-    rec.ondataavailable = (ev) => chunks.push(ev.data);
-    rec.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
-      const fr = new FileReader(); fr.onload = () => { audioData = fr.result; }; fr.readAsDataURL(blob);
-      const ap = document.getElementById("aprev"); ap.src = URL.createObjectURL(blob); ap.hidden = false;
-      btn.classList.remove("on"); btn.textContent = "● Nahrať znova";
-    };
-    rec.start(); btn.classList.add("on"); btn.textContent = "■ Zastaviť";
-    setTimeout(() => rec.state === "recording" && rec.stop(), 30000); // max 30 s
-  } catch { document.getElementById("imsg").textContent = "Mikrofón sa nepodarilo zapnúť."; }
-};
 document.getElementById("send").onclick = async () => {
   const imsg = document.getElementById("imsg");
-  if (!photoData && !audioData && !document.getElementById("note").value.trim()) { imsg.textContent = "Pridaj fotku, zvuk alebo popis."; return; }
+  if (!photoData && !document.getElementById("note").value.trim()) { imsg.textContent = "Pridaj fotku alebo popis."; return; }
   imsg.textContent = "Odosielam…";
   try {
     const r = await fetch(`/api/t/${token}/incident`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: document.getElementById("note").value, photo: photoData, audio: audioData,
+      body: JSON.stringify({ note: document.getElementById("note").value, photo: photoData,
         lat: last?.coords.latitude, lng: last?.coords.longitude })
     });
     if (!r.ok) throw 0;
