@@ -253,12 +253,17 @@ app.post("/api/t/:token/snapshot", bigJson, (req, res) => {
 app.get("/", requireAdmin, (req, res) => res.sendFile(pub("admin.html")));
 app.use("/api", requireAdmin);
 
-function employeeRow(e) {
-  return { ...e, link: `${PUBLIC_URL}/t/${e.token}` };
+function baseUrl(req) {
+  // link berie z adresy, cez ktorú práve pristupuješ (tunel, doména aj localhost fungujú samo)
+  const host = req.get("host");
+  return host ? `${req.protocol}://${host}` : PUBLIC_URL;
+}
+function employeeRow(e, req) {
+  return { ...e, link: `${baseUrl(req)}/t/${e.token}` };
 }
 app.get("/api/employees", (req, res) => {
   const rows = db.prepare("SELECT id, name, phone, token, active, created_at FROM employees ORDER BY name").all();
-  res.json(rows.map(employeeRow));
+  res.json(rows.map((e) => employeeRow(e, req)));
 });
 app.post("/api/employees", (req, res) => {
   const name = String(req.body.name || "").trim();
@@ -267,7 +272,7 @@ app.post("/api/employees", (req, res) => {
   const token = crypto.randomBytes(12).toString("base64url");
   const r = db.prepare("INSERT INTO employees(name, phone, token, created_at) VALUES (?, ?, ?, ?)").run(name, phone, token, Date.now());
   const e = db.prepare("SELECT id, name, phone, token, active, created_at FROM employees WHERE id = ?").get(r.lastInsertRowid);
-  res.json(employeeRow(e));
+  res.json(employeeRow(e, req));
 });
 app.patch("/api/employees/:id", (req, res) => {
   const id = Number(req.params.id);
@@ -278,7 +283,7 @@ app.patch("/api/employees/:id", (req, res) => {
   const active = req.body.active !== undefined ? (req.body.active ? 1 : 0) : e.active;
   const token = req.body.new_link ? crypto.randomBytes(12).toString("base64url") : e.token;
   db.prepare("UPDATE employees SET name = ?, phone = ?, active = ?, token = ? WHERE id = ?").run(name, phone, active, token, id);
-  res.json(employeeRow(db.prepare("SELECT id, name, phone, token, active, created_at FROM employees WHERE id = ?").get(id)));
+  res.json(employeeRow(db.prepare("SELECT id, name, phone, token, active, created_at FROM employees WHERE id = ?").get(id), req));
 });
 app.delete("/api/employees/:id", (req, res) => {
   const id = Number(req.params.id);

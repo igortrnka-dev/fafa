@@ -46,3 +46,18 @@ najmä pri kamere, sa poraďte s právnikom. Skryté sledovanie je protizákonn�
 ## Údržba dát
 - História polôh sa maže po 60 dňoch, snímky z kamery po 14 dňoch (nastaviteľné v server.js).
 - Databáza aj fotky sú v priečinku `data/` – zálohujte ho.
+
+## Spustenie lokálneho servera ako verejného (rýchly test)
+Ak chceš, aby appka bežala na tvojom počítači a bola dostupná zvonka s HTTPS
+(nutné pre polohu aj kameru), použi priložený skript. Jednorazovo nainštaluj tunel:
+```bash
+brew install cloudflared
+```
+Potom kedykoľvek spusti:
+```bash
+./start-public.sh
+```
+Skript spustí server (načíta `.env`) a vypíše verejnú adresu `https://....trycloudflare.com`.
+Tú pošli kolegom aj kuriérom – admin aj linky kuriérov fungujú priamo na nej.
+Adresa platí, kým skript beží; po Ctrl+C sa tunel aj server zastavia a adresa zanikne.
+Na trvalú adresu použi nasadenie na Render (pozri DEPLOY.md).
