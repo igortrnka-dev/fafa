@@ -275,6 +275,32 @@ app.post("/api/t/:token/snapshot", bigJson, (req, res) => {
   res.json({ stored: true, work_time: true });
 });
 
+// --- príjem polohy z aplikácie bežiacej na pozadí (Traccar Client / OsmAnd protokol) ---
+// Kuriér v appke Traccar Client nastaví: Server URL = https://<adresa>/gps, Device ID = svoj token.
+// Funguje aj keď je telefón zamknutý alebo prehliadač zavretý.
+function parseTs(v) {
+  if (v == null || v === "") return Date.now();
+  if (/^\d+$/.test(String(v))) { const n = Number(v); return n < 1e12 ? n * 1000 : n; }
+  const t = Date.parse(v);
+  return Number.isNaN(t) ? Date.now() : t;
+}
+function handleGps(req, res) {
+  const q = { ...(req.query || {}), ...(req.body || {}) };
+  const emp = getByToken.get(String(q.id || q.deviceid || ""));
+  if (!emp || !emp.active) return res.status(404).send("not found");
+  const lat = Number(q.lat), lng = Number(q.lon ?? q.lng ?? q.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return res.status(400).send("bad position");
+  const s = getSettings();
+  if (!isWorkTime(s)) return res.send("outside hours"); // 200, mimo pracovnej doby neukladáme
+  const acc = Number(q.accuracy);
+  let recorded = parseTs(q.timestamp);
+  if (Math.abs(Date.now() - recorded) > 24 * 3600 * 1000) recorded = Date.now();
+  insertPos.run(emp.id, lat, lng, Number.isFinite(acc) ? acc : null, null, clientIp(req), recorded);
+  res.send("ok");
+}
+app.get("/gps", handleGps);
+app.post("/gps", handleGps);
+
 // --- admin ---
 app.get("/", requireAdmin, (req, res) => sendPage(res, "admin.html"));
 app.use("/api", requireAdmin);

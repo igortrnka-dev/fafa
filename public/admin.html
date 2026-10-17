@@ -306,10 +306,18 @@ async function loadPeople() {
         <button class="b tog"></button>
         <button class="b new">Nový link</button>
         <button class="b del">Zmazať</button>
-      </div>`;
+      </div>
+      <details class="gps">
+        <summary class="small" style="cursor:pointer">Sledovanie na pozadí (Traccar Client)</summary>
+        <div class="small" style="margin-top:6px">Appka Traccar Client (zadarmo, iPhone aj Android) posiela polohu aj pri zamknutom telefóne. Nastav v nej:</div>
+        <div class="small">Server URL:</div><div class="link gurl"></div>
+        <div class="small">Device identifier:</div><div class="link gid"></div>
+      </details>`;
     c.querySelector(".nm").textContent = e.name + (e.active ? "" : " (vypnutý)");
     c.querySelector(".ph").textContent = e.phone || "";
     c.querySelector(".link").textContent = e.link;
+    c.querySelector(".gurl").textContent = location.origin + "/gps";
+    c.querySelector(".gid").textContent = e.token;
     const sms = c.querySelector(".sms");
     sms.href = `sms:${e.phone || ""}?&body=${encodeURIComponent(smsText(e))}`;
     c.querySelector(".copy").onclick = async (ev) => {
