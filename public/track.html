@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Poloha</title>
+<style>
+html,body{min-height:100%;margin:0}
+body{font:16px system-ui,sans-serif;background:#111;color:#cfd4d1;display:flex;flex-direction:column;align-items:center;gap:22px;padding:28px 18px}
+#s{text-align:center;font-size:18px}#s.ok{color:#5c5}#s.err{color:#e88}
+.who{color:#8a948f;font-size:14px}
+button{font:inherit;border:0;border-radius:10px;padding:14px 16px;cursor:pointer}
+#open{background:#8a2b2b;color:#fff;width:100%;max-width:360px}
+.panel{width:100%;max-width:360px;background:#1b1f1d;border:1px solid #2e3633;border-radius:12px;padding:16px;display:grid;gap:12px}
+.panel.hide{display:none}
+.panel h2{margin:0;font-size:16px}
+.panel label{font-size:13px;color:#8a948f;display:grid;gap:6px}
+textarea,input[type=file]{font:inherit;width:100%;background:#111;color:#cfd4d1;border:1px solid #2e3633;border-radius:8px;padding:10px}
+textarea{min-height:60px;resize:vertical}
+.rowb{display:flex;gap:8px}.rowb button{flex:1}
+#rec{background:#243029;color:#cfd4d1}#rec.on{background:#8a2b2b;color:#fff}
+#send{background:#1f6f4a;color:#fff}#cancel{background:#2e3633;color:#cfd4d1}
+.prev{display:grid;gap:8px}.prev img{max-width:100%;border-radius:8px}
+.note{font-size:12px;color:#6c766f;text-align:center;max-width:360px}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+</style></head><body>
+<div id="block" style="position:fixed;inset:0;background:#111;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center">
+  <div style="font-size:48px">📍</div>
+  <div style="font-size:19px;color:#fff;max-width:320px">Na pokračovanie musíš povoliť prístup k polohe.</div>
+  <div style="font-size:14px;color:#8a948f;max-width:320px" id="blockHow">Otvor nastavenia prehliadača pre túto stránku a povoľ Polohu, potom stlač Skúsiť znova.</div>
+  <button id="retry" style="background:#1f6f4a;color:#fff;border:0;border-radius:10px;padding:14px 22px;font:inherit;cursor:pointer">Skúsiť znova</button>
+</div>
+
+<div class="who" id="who"></div>
+<div style="text-align:center;font-size:20px;line-height:1.4">Dobrý deň 👋<br><span style="color:#8a948f;font-size:16px">Prajem pekný a bezpečný deň.</span></div>
+<div id="s">Spúšťam…</div>
+
+<div class="panel hide" id="cam">
+  <h2>Kamera vozidla</h2>
+  <video id="vid" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
+  <div class="note" id="camMsg">Pre bezpečnosť jazdy sa počas pracovnej doby odosiela fotka. Nechaj telefón v držiaku so zapnutou obrazovkou.</div>
+  <div class="rowb"><button id="camBtn" type="button" style="background:#1f6f4a;color:#fff">Zapnúť kameru vozidla</button></div>
+</div>
+
+<button id="open">Nahlásiť nehodu / poškodenie balíka</button>
+
+<div class="panel hide" id="panel">
+  <h2>Nehoda / poškodenie</h2>
+  <label>Fotka škody
+    <input type="file" id="photo" accept="image/*" capture="environment">
+  </label>
+  <div class="prev" id="prev"></div>
+  <label>Popis
+    <textarea id="note" placeholder="Čo sa stalo…"></textarea>
+  </label>
+  <div class="rowb">
+    <button id="cancel" type="button">Zrušiť</button>
+    <button id="send" type="button">Odoslať</button>
+  </div>
+  <div class="note" id="imsg"></div>
+</div>
+
+<div class="note">Táto stránka počas pracovnej doby odosiela tvoju polohu. Fotku a zvuk odošleš len keď sám stlačíš Odoslať.</div>
+
+<script>
+const token = location.pathname.split("/").pop();
+const el = document.getElementById("s");
+const say = (t, c = "") => { el.textContent = t; el.className = c; };
+let last = null, lastSent = 0, wake = null;
+
+let cfg = null;
+fetch(`/api/t/${token}`).then(r => r.ok ? r.json() : null).then(d => {
+  cfg = d; if (!d) return;
+  document.getElementById("who").textContent = d.name;
+  if (d.camera) {
+    document.getElementById("cam").classList.remove("hide");
+    // ak je kamera povinná a nie je spustená, vytrvalo pripomínaj
+    setInterval(() => {
+      if (!camStream || camStream.getVideoTracks()[0]?.readyState !== "live") {
+        camMsg.innerHTML = '<b style="color:#e88">Kamera vozidla nie je zapnutá. Stlač tlačidlo nižšie.</b>';
+        camBtn.style.animation = "pulse 1s infinite";
+      } else {
+        camMsg.textContent = "Kamera vozidla beží.";
+        camBtn.style.animation = "";
+      }
+    }, 5000);
+  }
+});
+
+async function send(p) {
+  const now = Date.now();
+  if (now - lastSent < 20000) return;
+  lastSent = now;
+  try {
+    const r = await fetch(`/api/t/${token}/pos`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, speed: p.coords.speed, ts: p.timestamp })
+    });
+    if (r.status === 404) return say("Link nie je platný", "err");
+    const j = await r.json();
+    say(j.stored ? "● Poloha sa odosiela" : "Mimo pracovnej doby", j.stored ? "ok" : "");
+  } catch { say("Bez internetu, skúšam znova…", "err"); lastSent = 0; }
+}
+const block = document.getElementById("block");
+function start() {
+  if (!navigator.geolocation) return say("Zariadenie nepodporuje polohu", "err");
+  navigator.geolocation.watchPosition(
+    (p) => { last = p; block.style.display = "none"; send(p); },
+    (e) => {
+      if (e.code === 1) { block.style.display = "flex"; }  // odmietnutá poloha = blokujúca obrazovka
+      else say("Čakám na GPS…", "err");
+    },
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 }
+  );
+  setInterval(() => last && send(last), 60000);
+}
+document.getElementById("retry").onclick = () => {
+  navigator.geolocation.getCurrentPosition(
+    (p) => { last = p; block.style.display = "none"; send(p); },
+    () => { block.style.display = "flex"; },
+    { enableHighAccuracy: true, timeout: 20000 }
+  );
+};
+async function keepAwake() { try { if ("wakeLock" in navigator && !wake) { wake = await navigator.wakeLock.request("screen"); wake.onrelease = () => wake = null; } } catch {} }
+document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && keepAwake());
+document.addEventListener("click", keepAwake);
+keepAwake(); start();
+
+// ---------- kamera vozidla (priebežná fotka, viditeľne, počas pracovnej doby) ----------
+let camStream = null, camTimer = null;
+const vid = document.getElementById("vid"), camMsg = document.getElementById("camMsg"), camBtn = document.getElementById("camBtn");
+async function startCam() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 960 }, audio: false });
+    vid.srcObject = camStream;
+    camBtn.textContent = "Kamera beží";
+    camBtn.disabled = true; camBtn.style.opacity = .6;
+    const every = Math.max(20, (cfg?.camera_interval || 60)) * 1000;
+    const shoot = () => snapshot();
+    shoot();
+    camTimer = setInterval(shoot, every);
+    // keď sa stream preruší (zamknutá obrazovka), skús obnoviť po návrate
+    camStream.getVideoTracks()[0].onended = () => { camBtn.disabled = false; camBtn.style.opacity = 1; camBtn.textContent = "Znova zapnúť kameru"; };
+  } catch { camMsg.textContent = "Kameru sa nepodarilo zapnúť. Povoľ prístup ku kamere."; }
+}
+async function snapshot() {
+  if (!camStream || !vid.videoWidth) return;
+  const c = document.createElement("canvas"); c.width = vid.videoWidth; c.height = vid.videoHeight;
+  c.getContext("2d").drawImage(vid, 0, 0);
+  const photo = c.toDataURL("image/jpeg", 0.5);
+  try {
+    await fetch(`/api/t/${token}/snapshot`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photo, lat: last?.coords.latitude, lng: last?.coords.longitude }) });
+  } catch {}
+}
+camBtn.onclick = startCam;
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && camStream && camStream.getVideoTracks()[0].readyState === "live") snapshot(); });
+
+// ---------- nahlásenie nehody ----------
+const panel = document.getElementById("panel");
+let photoData = null;
+document.getElementById("open").onclick = () => panel.classList.remove("hide");
+document.getElementById("cancel").onclick = reset;
+function reset() {
+  panel.classList.add("hide"); photoData = null;
+  document.getElementById("prev").innerHTML = ""; document.getElementById("note").value = "";
+  document.getElementById("photo").value = ""; document.getElementById("imsg").textContent = "";
+}
+// fotka + zmenšenie v prehliadači
+document.getElementById("photo").onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image(); const url = URL.createObjectURL(f);
+  img.onload = () => {
+    const max = 1280, sc = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = img.width * sc; c.height = img.height * sc;
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    photoData = c.toDataURL("image/jpeg", 0.7);
+    URL.revokeObjectURL(url);
+    document.getElementById("prev").innerHTML = `<img src="${photoData}">`;
+  };
+  img.src = url;
+};
+// hlasová poznámka
+document.getElementById("rec").onclick = async () => {
+  const btn = document.getElementById("rec");
+  if (rec && rec.state === "recording") { rec.stop(); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    rec = new MediaRecorder(stream); chunks = [];
+    rec.ondataavailable = (ev) => chunks.push(ev.data);
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      const fr = new FileReader(); fr.onload = () => { audioData = fr.result; }; fr.readAsDataURL(blob);
+      const ap = document.getElementById("aprev"); ap.src = URL.createObjectURL(blob); ap.hidden = false;
+      btn.classList.remove("on"); btn.textContent = "● Nahrať znova";
+    };
+    rec.start(); btn.classList.add("on"); btn.textContent = "■ Zastaviť";
+    setTimeout(() => rec.state === "recording" && rec.stop(), 30000); // max 30 s
+  } catch { document.getElementById("imsg").textContent = "Mikrofón sa nepodarilo zapnúť."; }
+};
+document.getElementById("send").onclick = async () => {
+  const imsg = document.getElementById("imsg");
+  if (!photoData && !audioData && !document.getElementById("note").value.trim()) { imsg.textContent = "Pridaj fotku, zvuk alebo popis."; return; }
+  imsg.textContent = "Odosielam…";
+  try {
+    const r = await fetch(`/api/t/${token}/incident`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: document.getElementById("note").value, photo: photoData, audio: audioData,
+        lat: last?.coords.latitude, lng: last?.coords.longitude })
+    });
+    if (!r.ok) throw 0;
+    imsg.textContent = "Odoslané. Ďakujeme."; setTimeout(reset, 1500);
+  } catch { imsg.textContent = "Nepodarilo sa odoslať, skús znova."; }
+};
+</script>
+</body></html>

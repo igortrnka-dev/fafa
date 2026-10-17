@@ -1,0 +1,17 @@
+<!doctype html><html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prihlásenie</title>
+<style>
+body{font:16px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f2f4f3;color:#1b2420;padding:0 16px}
+form{background:#fff;padding:28px;border-radius:10px;box-shadow:0 2px 14px rgba(0,0,0,.08);display:grid;gap:12px;width:100%;max-width:320px}
+h1{font-size:20px;margin:0 0 4px}
+input,button{font:inherit;padding:10px 12px;border-radius:6px;border:1px solid #c9d1cd}
+button{background:#1f6f4a;color:#fff;border:0;cursor:pointer}
+.err{color:#c0392b;font-size:14px}
+</style></head><body>
+<form method="post" action="/login">
+<h1>Kde sú kuriéri</h1>
+<input type="password" id="password" name="password" placeholder="Heslo" autofocus required>
+<div class="err" id="err" hidden>Nesprávne heslo</div>
+<button>Prihlásiť</button>
+</form>
+<script>if(location.search.includes("chyba"))document.getElementById("err").hidden=false</script>
+</body></html>

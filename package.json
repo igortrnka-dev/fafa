@@ -1,0 +1,16 @@
+{
+  "name": "kde-su-kurieri",
+  "version": "1.0.0",
+  "description": "Sledovanie polohy zamestnancov cez SMS link počas pracovnej doby",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

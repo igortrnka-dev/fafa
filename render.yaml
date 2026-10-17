@@ -1,0 +1,26 @@
+# Nasadenie na Render (https://render.com)
+# Po prepojení repozitára Render tento súbor načíta a vytvorí službu automaticky.
+services:
+  - type: web
+    name: kde-su-kurieri
+    runtime: node
+    plan: starter            # "starter" má trvalý disk; "free" disk nemá (dáta sa mažú pri reštarte)
+    region: frankfurt         # najbližší región k SK
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: ADMIN_PASSWORD
+        sync: false           # heslo zadáš v Render dashboarde, neukladá sa do repozitára
+      - key: SESSION_SECRET
+        generateValue: true   # Render vygeneruje dlhý náhodný kľúč
+      - key: PUBLIC_URL
+        sync: false           # sem dáš verejnú adresu služby, napr. https://kde-su-kurieri.onrender.com
+      - key: DB_PATH
+        value: /var/data/poloha.sqlite
+      - key: NODE_VERSION
+        value: "24"
+    disk:
+      name: data
+      mountPath: /var/data    # trvalé úložisko pre databázu aj fotky
+      sizeGB: 1

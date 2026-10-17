@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kde sú kuriéri</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#f2f4f3;--panel:#fff;--fg:#1b2420;--muted:#66736d;--line:#dde3e0;--accent:#1f6f4a;--on:#22a35a;--stale:#d39b1d;--off:#9aa5a0}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px system-ui,sans-serif;color:var(--fg);background:var(--bg);display:grid;grid-template-columns:340px 1fr;height:100%}
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px;margin:0}
+header a{color:var(--muted);font-size:13px}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;padding:10px;border:0;background:none;font:inherit;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--accent);border-color:var(--accent);font-weight:600}
+.pane{overflow:auto;flex:1;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.emp{border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;display:grid;grid-template-columns:12px 1fr;gap:4px 10px;align-items:center}
+.emp:hover{border-color:var(--accent)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--off)}
+.dot.online{background:var(--on);box-shadow:0 0 0 3px #22a35a33}.dot.stale{background:var(--stale)}
+.emp .n{font-weight:600}.emp .t{grid-column:2;color:var(--muted);font-size:12px}
+.emp .w{grid-column:1/3;font-size:12px;font-weight:600;color:#c0392b}
+.emp.bad{border-color:#c0392b;background:#c0392b11}
+.status{font-size:12px;color:var(--muted)}
+.warnbar{background:#c0392b;color:#fff;border-radius:8px;padding:8px 10px;font-weight:600;font-size:13px}
+label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+input,select,button.b{font:inherit;padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+button.b{cursor:pointer}
+button.p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.row>*{flex:1;min-width:0}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:8px}
+.link{font:12px ui-monospace,monospace;word-break:break-all;color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days label{display:flex;gap:3px;align-items:center;color:var(--fg);font-size:13px}
+#map{height:100%;min-height:0}
+.lbl{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-weight:600;font-size:12px;white-space:nowrap}
+@media (max-width:760px){body{grid-template-columns:1fr;grid-template-rows:55vh 1fr}#map{order:-1}aside{border-right:0;border-top:1px solid var(--line)}}
+</style></head><body>
+<aside>
+  <header><h1>Kde sú kuriéri</h1><a href="/logout">Odhlásiť</a></header>
+  <div class="tabs">
+    <button data-tab="live" class="on">Teraz</button>
+    <button data-tab="hist">História</button>
+    <button data-tab="snaps">Snímky</button>
+    <button data-tab="incidents">Nehody</button>
+    <button data-tab="people">Kuriéri</button>
+    <button data-tab="set">Nastavenia</button>
+  </div>
+
+  <div class="pane" id="live">
+    <div class="status" id="liveStatus">Načítavam…</div>
+    <div id="liveList" style="display:grid;gap:8px"></div>
+    <div class="small">Zelená: poloha za posledné 2 min. Oranžová: staršia poloha. Sivá: dnes bez polohy.</div>
+  </div>
+
+  <div class="pane" id="hist" hidden>
+    <label>Kuriér<select id="hEmp"></select></label>
+    <label>Deň<input type="date" id="hDate"></label>
+    <button class="b p" id="hShow">Zobraziť trasu</button>
+    <div class="small" id="hInfo"></div>
+  </div>
+
+  <div class="pane" id="snaps" hidden>
+    <label>Kuriér<select id="snEmp"></select></label>
+    <label>Deň<input type="date" id="snDate"></label>
+    <button class="b p" id="snShow">Zobraziť snímky</button>
+    <div class="small" id="snInfo"></div>
+    <div id="snGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+  </div>
+
+  <div class="pane" id="incidents" hidden>
+    <div class="small">Nehody a poškodenia nahlásené kuriérmi.</div>
+    <div id="incList" style="display:grid;gap:10px"></div>
+  </div>
+
+  <div class="pane" id="people" hidden>
+    <form id="addForm" class="card">
+      <b>Pridať kuriéra</b>
+      <label>Meno<input id="aName" required></label>
+      <label>Telefón (pre SMS)<input id="aPhone" type="tel" placeholder="+421…"></label>
+      <button class="b p">Pridať a vytvoriť link</button>
+    </form>
+    <div id="peopleList" style="display:grid;gap:8px"></div>
+  </div>
+
+  <div class="pane" id="set" hidden>
+    <form id="setForm" class="card">
+      <b>Pracovná doba</b>
+      <div class="small">Mimo tohto času server polohu neukladá.</div>
+      <div class="row">
+        <label>Od<input type="time" id="sStart"></label>
+        <label>Do<input type="time" id="sEnd"></label>
+      </div>
+      <div class="days" id="sDays"></div>
+      <hr style="border:0;border-top:1px solid var(--line);width:100%">
+      <b>Kamera vozidla</b>
+      <div class="small">Keď je zapnutá, appka kuriéra odosiela fotku v zadanom intervale počas pracovnej doby. Kuriér vidí živý náhľad a svietiaci indikátor. Kuriérov treba vopred písomne informovať (GDPR, Zákonník práce §13).</div>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--fg)"><input type="checkbox" id="sCam"> Zapnúť kameru vozidla</label>
+      <label>Interval fotenia (sekundy)<input type="number" id="sCamInt" min="20" max="600" step="10"></label>
+      <button class="b p">Uložiť</button>
+      <div class="small" id="sMsg"></div>
+    </form>
+  </div>
+</aside>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const api = async (url, opt = {}) => {
+  const r = await fetch(url, { headers: { "Content-Type": "application/json" }, ...opt });
+  if (r.status === 401) { location.href = "/login"; throw new Error("401"); }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || "Chyba");
+  return j;
+};
+const fmtTime = (ms) => new Date(ms).toLocaleTimeString("sk-SK", { hour: "2-digit", minute: "2-digit" });
+const ago = (ms) => {
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return "pred chvíľou";
+  if (s < 3600) return `pred ${Math.round(s / 60)} min`;
+  const d = new Date(ms);
+  return d.toDateString() === new Date().toDateString() ? `o ${fmtTime(ms)}` : d.toLocaleString("sk-SK");
+};
+
+// ---------- mapa ----------
+const map = L.map("map").setView([48.67, 19.7], 7);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+const liveLayer = L.layerGroup().addTo(map);
+const histLayer = L.layerGroup().addTo(map);
+const markers = {};
+let fitted = false;
+const color = { online: "#22a35a", stale: "#d39b1d", none: "#9aa5a0" };
+
+// ---------- záložky ----------
+let tab = "live";
+document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".pane").forEach((p) => p.hidden = p.id !== tab);
+  if (tab === "live") { histLayer.clearLayers(); liveLayer.addTo(map); }
+  if (tab === "hist") map.removeLayer(liveLayer);
+  if (tab === "people") loadPeople();
+  if (tab === "set") loadSettings();
+  if (tab === "snaps") fillSel("#snEmp");
+  if (tab === "incidents") loadIncidents();
+});
+
+// ---------- naživo ----------
+async function loadLive() {
+  let data;
+  try { data = await api("/api/live"); } catch { $("#liveStatus").textContent = "Server neodpovedá"; return; }
+  const online = data.employees.filter((e) => e.status === "online").length;
+  $("#liveStatus").textContent = `${online} z ${data.employees.length} online · ${data.work_time ? "pracovná doba" : "mimo pracovnej doby"} · aktualizované ${fmtTime(data.now)}`;
+  $("#liveList").innerHTML = "";
+  const bounds = [];
+  let problems = 0;
+  const camMax = (data.camera_interval || 60) * 1000 * 3; // kamera: tolerancia 3 intervaly
+  for (const e of data.employees) {
+    // vyhodnotenie plnenia počas pracovnej doby
+    const warns = [];
+    if (data.work_time) {
+      if (e.status !== "online") warns.push(e.recorded_at ? "neposiela polohu" : "nespustil sledovanie");
+      if (data.camera && (!e.snapshot_at || data.now - e.snapshot_at > camMax)) warns.push("kamera nezapnutá");
+    }
+    if (warns.length) problems++;
+
+    const div = document.createElement("div");
+    div.className = "emp" + (warns.length ? " bad" : "");
+    div.innerHTML = `<span class="dot ${e.status}"></span><span class="n"></span><span class="t"></span><span class="w"></span>`;
+    div.querySelector(".n").textContent = e.name;
+    div.querySelector(".w").textContent = warns.length ? "⚠ " + warns.join(" · ") : "";
+    const bits = [];
+    if (e.recorded_at) { bits.push(ago(e.recorded_at)); if (e.speed) bits.push(`${Math.round(e.speed * 3.6)} km/h`); } else bits.push("zatiaľ bez polohy");
+    if (e.ip) bits.push(`IP ${e.ip}`);
+    div.querySelector(".t").textContent = bits.join(" · ");
+    if (e.snapshot) {
+      const im = document.createElement("img");
+      im.src = e.snapshot; im.loading = "lazy";
+      im.style.cssText = "grid-column:1/3;width:100%;border-radius:6px;margin-top:4px";
+      im.title = `snímka ${e.snapshot_at ? ago(e.snapshot_at) : ""}`;
+      div.append(im);
+    }
+    if (e.lat != null) div.onclick = () => { map.setView([e.lat, e.lng], 16); markers[e.id]?.openPopup(); };
+    $("#liveList").append(div);
+
+    if (e.lat == null) { if (markers[e.id]) { liveLayer.removeLayer(markers[e.id]); delete markers[e.id]; } continue; }
+    bounds.push([e.lat, e.lng]);
+    const style = { radius: 9, color: "#fff", weight: 2, fillColor: color[e.status], fillOpacity: 1 };
+    if (!markers[e.id]) {
+      markers[e.id] = L.circleMarker([e.lat, e.lng], style).addTo(liveLayer)
+        .bindTooltip(e.name, { permanent: true, direction: "right", offset: [10, 0], className: "lbl" });
+    }
+    markers[e.id].setLatLng([e.lat, e.lng]).setStyle(style)
+      .bindPopup(`<b>${e.name.replace(/</g, "&lt;")}</b><br>${ago(e.recorded_at)} · presnosť ${Math.round(e.accuracy || 0)} m`);
+  }
+  if (problems && data.work_time) {
+    const bar = document.createElement("div");
+    bar.className = "warnbar";
+    bar.textContent = `⚠ ${problems} ${problems === 1 ? "kuriér nespĺňa" : "kuriéri/-ov nespĺňa"} sledovanie`;
+    $("#liveList").prepend(bar);
+  }
+  if (!fitted && bounds.length) { map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 }); fitted = true; }
+}
+loadLive();
+setInterval(() => tab === "live" && loadLive(), 15000);
+
+// ---------- história ----------
+$("#hDate").value = new Date().toLocaleDateString("sv-SE");
+$("#snDate").value = new Date().toLocaleDateString("sv-SE");
+async function fillSel(sel) {
+  const list = await api("/api/employees");
+  const keep = $(sel).value;
+  $(sel).innerHTML = "";
+  for (const e of list) $(sel).append(new Option(e.name, e.id));
+  if (keep) $(sel).value = keep;
+}
+const fillHistEmp = () => fillSel("#hEmp");
+fillHistEmp();
+$("#hShow").onclick = async () => {
+  histLayer.clearLayers();
+  const pts = await api(`/api/history?employee=${$("#hEmp").value}&date=${$("#hDate").value}`);
+  if (!pts.length) { $("#hInfo").textContent = "V tento deň nie sú žiadne polohy."; return; }
+  const ll = pts.map((p) => [p.lat, p.lng]);
+  L.polyline(ll, { color: "#1f6f4a", weight: 4, opacity: .8 }).addTo(histLayer);
+  L.circleMarker(ll[0], { radius: 7, color: "#fff", weight: 2, fillColor: "#22a35a", fillOpacity: 1 }).bindTooltip(`Začiatok ${fmtTime(pts[0].recorded_at)}`).addTo(histLayer);
+  L.circleMarker(ll.at(-1), { radius: 7, color: "#fff", weight: 2, fillColor: "#c0392b", fillOpacity: 1 }).bindTooltip(`Koniec ${fmtTime(pts.at(-1).recorded_at)}`).addTo(histLayer);
+  let km = 0;
+  for (let i = 1; i < ll.length; i++) km += map.distance(ll[i - 1], ll[i]) / 1000;
+  $("#hInfo").textContent = `${fmtTime(pts[0].recorded_at)} – ${fmtTime(pts.at(-1).recorded_at)} · približne ${km.toFixed(1)} km · ${pts.length} bodov`;
+  map.fitBounds(ll, { padding: [40, 40] });
+};
+
+// ---------- snímky z kamery ----------
+$("#snShow").onclick = async () => {
+  const grid = $("#snGrid"); grid.innerHTML = "";
+  const list = await api(`/api/snapshots?employee=${$("#snEmp").value}&date=${$("#snDate").value}`);
+  $("#snInfo").textContent = list.length ? `${list.length} snímok` : "V tento deň nie sú žiadne snímky.";
+  for (const s of list) {
+    const fig = document.createElement("figure");
+    fig.style.cssText = "margin:0;display:grid;gap:2px";
+    fig.innerHTML = `<img src="${s.url}" loading="lazy" style="width:100%;border-radius:6px;cursor:pointer"><figcaption class="small"></figcaption>`;
+    fig.querySelector("figcaption").textContent = fmtTime(s.created_at) + (s.lat != null ? " · na mape" : "");
+    fig.querySelector("img").onclick = () => window.open(s.url, "_blank");
+    if (s.lat != null) fig.querySelector("figcaption").onclick = () => { map.setView([s.lat, s.lng], 16); };
+    grid.append(fig);
+  }
+};
+
+// ---------- nehody ----------
+async function loadIncidents() {
+  const list = await api("/api/incidents");
+  const box = $("#incList");
+  box.innerHTML = list.length ? "" : '<div class="small">Zatiaľ žiadne nahlásené nehody.</div>';
+  for (const it of list) {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = `<div class="row" style="align-items:center"><b class="nm"></b><span class="small tm" style="text-align:right"></span></div>
+      <div class="note nt"></div>${it.photo ? `<img src="${it.photo}" style="width:100%;border-radius:6px;cursor:pointer">` : ""}
+      ${it.audio ? `<audio controls src="${it.audio}" style="width:100%"></audio>` : ""}
+      <div class="small meta"></div>`;
+    c.querySelector(".nm").textContent = it.name;
+    c.querySelector(".tm").textContent = new Date(it.created_at).toLocaleString("sk-SK");
+    c.querySelector(".nt").textContent = it.note || "";
+    c.querySelector(".meta").textContent = (it.lat != null ? "poloha nehody · " : "") + (it.ip ? `IP ${it.ip}` : "");
+    const img = c.querySelector("img");
+    if (img) img.onclick = () => window.open(it.photo, "_blank");
+    if (it.lat != null) c.querySelector(".meta").style.cursor = "pointer", c.querySelector(".meta").onclick = () => { map.setView([it.lat, it.lng], 16); };
+    box.append(c);
+  }
+}
+
+// ---------- kuriéri ----------
+const smsText = (e) => `Ahoj ${e.name}, otvor tento link na zdieľanie polohy počas zmeny: ${e.link}`;
+async function loadPeople() {
+  const list = await api("/api/employees");
+  const box = $("#peopleList");
+  box.innerHTML = list.length ? "" : '<div class="small">Zatiaľ žiadni kuriéri. Pridajte prvého hore.</div>';
+  for (const e of list) {
+    const c = document.createElement("div");
+    c.className = "card";
+    c.innerHTML = `
+      <div class="row" style="align-items:center"><b class="nm"></b><span class="small ph" style="text-align:right"></span></div>
+      <div class="link"></div>
+      <div class="row">
+        <button class="b copy">Kopírovať link</button>
+        <a class="b p sms" style="text-align:center;text-decoration:none">Poslať SMS</a>
+      </div>
+      <div class="row">
+        <button class="b tog"></button>
+        <button class="b new">Nový link</button>
+        <button class="b del">Zmazať</button>
+      </div>`;
+    c.querySelector(".nm").textContent = e.name + (e.active ? "" : " (vypnutý)");
+    c.querySelector(".ph").textContent = e.phone || "";
+    c.querySelector(".link").textContent = e.link;
+    const sms = c.querySelector(".sms");
+    sms.href = `sms:${e.phone || ""}?&body=${encodeURIComponent(smsText(e))}`;
+    c.querySelector(".copy").onclick = async (ev) => {
+      try { await navigator.clipboard.writeText(e.link); ev.target.textContent = "Skopírované"; } catch { prompt("Link:", e.link); }
+    };
+    c.querySelector(".tog").textContent = e.active ? "Vypnúť" : "Zapnúť";
+    c.querySelector(".tog").onclick = async () => { await api(`/api/employees/${e.id}`, { method: "PATCH", body: JSON.stringify({ active: !e.active }) }); loadPeople(); };
+    c.querySelector(".new").onclick = async () => {
+      if (!confirm(`Vytvoriť nový link pre ${e.name}? Starý link prestane fungovať.`)) return;
+      await api(`/api/employees/${e.id}`, { method: "PATCH", body: JSON.stringify({ new_link: true }) }); loadPeople();
+    };
+    c.querySelector(".del").onclick = async () => {
+      if (!confirm(`Zmazať ${e.name} aj s celou históriou polôh?`)) return;
+      await api(`/api/employees/${e.id}`, { method: "DELETE" }); loadPeople(); fillHistEmp(); loadLive();
+    };
+    box.append(c);
+  }
+}
+$("#addForm").onsubmit = async (ev) => {
+  ev.preventDefault();
+  try {
+    await api("/api/employees", { method: "POST", body: JSON.stringify({ name: $("#aName").value, phone: $("#aPhone").value }) });
+    ev.target.reset(); loadPeople(); fillHistEmp(); loadLive();
+  } catch (err) { alert(err.message); }
+};
+
+// ---------- nastavenia ----------
+const DAY_NAMES = [[1, "Po"], [2, "Ut"], [3, "St"], [4, "Št"], [5, "Pi"], [6, "So"], [0, "Ne"]];
+async function loadSettings() {
+  const s = await api("/api/settings");
+  $("#sStart").value = s.work_start; $("#sEnd").value = s.work_end;
+  $("#sCam").checked = s.camera === "1";
+  $("#sCamInt").value = s.camera_interval || "60";
+  const on = s.work_days.split(",");
+  $("#sDays").innerHTML = "";
+  for (const [n, l] of DAY_NAMES) {
+    const lab = document.createElement("label");
+    lab.innerHTML = `<input type="checkbox" value="${n}" ${on.includes(String(n)) ? "checked" : ""}>${l}`;
+    $("#sDays").append(lab);
+  }
+}
+$("#setForm").onsubmit = async (ev) => {
+  ev.preventDefault();
+  const days = [...document.querySelectorAll("#sDays input:checked")].map((i) => i.value).join(",");
+  try {
+    await api("/api/settings", { method: "PUT", body: JSON.stringify({ work_start: $("#sStart").value, work_end: $("#sEnd").value, work_days: days, camera: $("#sCam").checked, camera_interval: Number($("#sCamInt").value) }) });
+    $("#sMsg").textContent = "Uložené";
+  } catch (err) { $("#sMsg").textContent = err.message; }
+};
+</script>
+</body></html>
