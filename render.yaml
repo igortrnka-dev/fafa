@@ -2,7 +2,7 @@
 # Po prepojení repozitára Render tento súbor načíta a vytvorí službu automaticky.
 services:
   - type: web
-    name: kde-su-kurieri
+    name: deliveryverification
     runtime: node
     plan: starter            # "starter" má trvalý disk; "free" disk nemá (dáta sa mažú pri reštarte)
     region: frankfurt         # najbližší región k SK
