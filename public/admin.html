@@ -188,7 +188,7 @@ async function loadLive() {
     const bits = [];
     if (e.recorded_at) { bits.push(ago(e.recorded_at)); if (e.speed) bits.push(`${Math.round(e.speed * 3.6)} km/h`); } else bits.push("zatiaľ bez polohy");
     if (e.ip) bits.push(`IP ${e.ip}`);
-    bits.push(e.consent_at ? `súhlas ${new Date(e.consent_at).toLocaleDateString("sk-SK")}` : "bez súhlasu");
+    bits.push(e.consent_at ? `otvoril ${new Date(e.consent_at).toLocaleDateString("sk-SK")}` : "link neotvorený");
     div.querySelector(".t").textContent = bits.join(" · ");
     if (e.snapshot) {
       const im = document.createElement("img");

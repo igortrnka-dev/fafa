@@ -37,15 +37,6 @@ textarea{min-height:60px;resize:vertical}
   <button id="retry" style="background:var(--accent);color:#fff">Try again</button>
 </div>
 
-<div id="consent" style="position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;text-align:center">
-  <div style="font-size:40px">🚚</div>
-  <div class="note" id="consentName" style="font-size:14px"></div>
-  <h1 style="font-size:20px;margin:0;max-width:360px">Before your shift</h1>
-  <p style="color:var(--muted);font-size:15px;line-height:1.5;max-width:360px">By tapping “I agree and continue”, you confirm that — in accordance with your signed employment contract — you consent to location tracking and photo documentation during your working hours.</p>
-  <button id="agree" style="background:var(--accent);color:#fff;width:100%;max-width:360px">I agree and continue</button>
-  <div class="note" style="max-width:360px">Your acknowledgement is recorded with the date and time.</div>
-</div>
-
 <div class="who" id="who"></div>
 
 <div class="confirm">
@@ -94,27 +85,26 @@ let last = null, lastSent = 0, wake = null;
 let cfg = null, started = false;
 fetch(`/api/t/${token}`).then(r => r.ok ? r.json() : null).then(d => {
   cfg = d;
-  const consent = document.getElementById("consent");
-  if (!d) { consent.innerHTML = '<div style="font-size:19px;color:#e88">This link is not valid.</div>'; return; }
+  if (!d) { say("This link is not valid", "err"); return; }
   document.getElementById("who").textContent = d.name;
-  document.getElementById("consentName").textContent = d.name;
-  document.getElementById("agree").onclick = begin;
+  begin();
 });
 
-// courier taps "I agree and continue": log consent, then request location + camera within the same tap
+// súhlas je daný v pracovnej zmluve; po otvorení linku sa všetko spustí rovno
 function begin() {
   if (started) return; started = true;
-  fetch(`/api/t/${token}/consent`, { method: "POST" }).catch(() => {});
-  document.getElementById("consent").hidden = true;
+  fetch(`/api/t/${token}/consent`, { method: "POST" }).catch(() => {});  // záznam prístupu ako dôkaz
   keepAwake();
   start();
   if (cfg?.camera) {
     document.getElementById("cam").classList.remove("hide");
-    startCam();
-    // if the camera is required but not running, keep reminding
+    startCam();  // skús hneď; na iPhone to môže vyžadovať dotyk, preto aj nižšie
+    document.addEventListener("pointerdown", () => {
+      if (!camStream || camStream.getVideoTracks()[0]?.readyState !== "live") startCam();
+    });
     setInterval(() => {
       if (!camStream || camStream.getVideoTracks()[0]?.readyState !== "live") {
-        camMsg.innerHTML = '<b style="color:#e88">The vehicle camera is off. Tap the button below.</b>';
+        camMsg.innerHTML = '<b style="color:#e88">Tap the screen to start the vehicle camera.</b>';
         camBtn.style.animation = "pop 1s infinite";
       } else {
         camMsg.textContent = "Vehicle camera is on.";
@@ -163,9 +153,11 @@ document.addEventListener("visibilitychange", () => document.visibilityState ===
 // sledovanie sa spustí až po potvrdení súhlasu (funkcia begin)
 
 // ---------- vehicle camera (periodic photo, visible, during working hours) ----------
-let camStream = null, camTimer = null;
+let camStream = null, camTimer = null, camStarting = false;
 const vid = document.getElementById("vid"), camMsg = document.getElementById("camMsg"), camBtn = document.getElementById("camBtn");
 async function startCam() {
+  if (camStarting || (camStream && camStream.getVideoTracks()[0]?.readyState === "live")) return;
+  camStarting = true;
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 960 }, audio: false });
     vid.srcObject = camStream;
@@ -175,8 +167,9 @@ async function startCam() {
     const shoot = () => snapshot();
     shoot();
     camTimer = setInterval(shoot, every);
-    camStream.getVideoTracks()[0].onended = () => { camBtn.disabled = false; camBtn.style.opacity = 1; camBtn.textContent = "Turn camera back on"; };
-  } catch { camMsg.textContent = "Couldn't start the camera. Please allow camera access."; }
+    camStream.getVideoTracks()[0].onended = () => { camStream = null; camBtn.disabled = false; camBtn.style.opacity = 1; camBtn.textContent = "Turn camera back on"; };
+  } catch { camStream = null; camMsg.textContent = "Couldn't start the camera. Please allow camera access."; }
+  finally { camStarting = false; }
 }
 async function snapshot() {
   if (!camStream || !vid.videoWidth) return;
