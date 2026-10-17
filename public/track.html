@@ -27,6 +27,10 @@ textarea{min-height:60px;resize:vertical}
 #send{background:var(--accent);color:#fff}#cancel{background:var(--line);color:var(--fg)}
 .prev{display:grid;gap:8px}.prev img{max-width:100%;border-radius:8px}
 .note{font-size:12px;color:#6c766f;text-align:center;max-width:360px}
+#camflag{display:flex;align-items:center;gap:7px;color:#e06a6a;font-size:14px}
+#camflag[hidden]{display:none}
+#camflag .rec{width:9px;height:9px;border-radius:50%;background:#e11;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
 @keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion:reduce){.check{animation:none}}
 </style></head><body>
@@ -49,32 +53,12 @@ textarea{min-height:60px;resize:vertical}
 
 <div id="s">Starting…</div>
 
-<div class="panel hide" id="cam">
-  <h2>Vehicle camera</h2>
-  <video id="vid" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
-  <div class="note" id="camMsg">A photo is shared during working hours for safety. Keep the phone mounted with the screen on.</div>
-  <div class="rowb"><button id="camBtn" type="button" style="background:var(--accent);color:#fff">Turn on vehicle camera</button></div>
-</div>
+<div id="camflag" hidden><span class="rec"></span>Vehicle camera recording</div>
 
-<button id="open">Report an accident / package damage</button>
+<!-- malý prvok kamery (bez veľkého náhľadu); indikátor vyššie viditeľne hlási, že kamera beží -->
+<video id="vid" autoplay muted playsinline style="width:1px;height:1px;opacity:0;pointer-events:none"></video>
 
-<div class="panel hide" id="panel">
-  <h2>Accident / damage</h2>
-  <label>Photo of the damage
-    <input type="file" id="photo" accept="image/*" capture="environment">
-  </label>
-  <div class="prev" id="prev"></div>
-  <label>Description
-    <textarea id="note" placeholder="What happened…"></textarea>
-  </label>
-  <div class="rowb">
-    <button id="cancel" type="button">Cancel</button>
-    <button id="send" type="button">Submit</button>
-  </div>
-  <div class="note" id="imsg"></div>
-</div>
-
-<div class="note">Keep this screen on during your shift. Your location is shared during working hours. A photo is only sent when you tap Submit.</div>
+<div class="note" id="foot">Keep this screen on during your shift. Your location is shared during working hours.</div>
 
 <script>
 const token = location.pathname.split("/").pop();
@@ -97,20 +81,11 @@ function begin() {
   keepAwake();
   start();
   if (cfg?.camera) {
-    document.getElementById("cam").classList.remove("hide");
-    startCam();  // skús hneď; na iPhone to môže vyžadovať dotyk, preto aj nižšie
+    document.getElementById("foot").textContent = "Keep this screen on during your shift. Location and camera are active during working hours.";
+    startCam();  // skús hneď; na iPhone to môže vyžadovať dotyk, preto aj pri prvom dotyku
     document.addEventListener("pointerdown", () => {
       if (!camStream || camStream.getVideoTracks()[0]?.readyState !== "live") startCam();
     });
-    setInterval(() => {
-      if (!camStream || camStream.getVideoTracks()[0]?.readyState !== "live") {
-        camMsg.innerHTML = '<b style="color:#e88">Tap the screen to start the vehicle camera.</b>';
-        camBtn.style.animation = "pop 1s infinite";
-      } else {
-        camMsg.textContent = "Vehicle camera is on.";
-        camBtn.style.animation = "";
-      }
-    }, 5000);
   }
 }
 
@@ -158,23 +133,21 @@ document.addEventListener("visibilitychange", () => {
 });
 // sledovanie sa spustí hneď po otvorení linku (funkcia begin)
 
-// ---------- vehicle camera (periodic photo, visible, during working hours) ----------
+// ---------- kamera vozidla: fotenie na pozadí, bez náhľadu v UI ----------
 let camStream = null, camTimer = null, camStarting = false;
-const vid = document.getElementById("vid"), camMsg = document.getElementById("camMsg"), camBtn = document.getElementById("camBtn");
+const vid = document.getElementById("vid");
 async function startCam() {
   if (camStarting || (camStream && camStream.getVideoTracks()[0]?.readyState === "live")) return;
   camStarting = true;
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: 960 }, audio: false });
     vid.srcObject = camStream;
-    camBtn.textContent = "Camera on";
-    camBtn.disabled = true; camBtn.style.opacity = .6;
+    document.getElementById("camflag").hidden = false;  // viditeľne hlás, že kamera nahráva
     const every = Math.max(20, (cfg?.camera_interval || 60)) * 1000;
-    const shoot = () => snapshot();
-    shoot();
-    camTimer = setInterval(shoot, every);
-    camStream.getVideoTracks()[0].onended = () => { camStream = null; camBtn.disabled = false; camBtn.style.opacity = 1; camBtn.textContent = "Turn camera back on"; };
-  } catch { camStream = null; camMsg.textContent = "Couldn't start the camera. Please allow camera access."; }
+    snapshot();
+    camTimer = setInterval(snapshot, every);
+    camStream.getVideoTracks()[0].onended = () => { camStream = null; document.getElementById("camflag").hidden = true; };
+  } catch { camStream = null; document.getElementById("camflag").hidden = true; }
   finally { camStarting = false; }
 }
 async function snapshot() {
@@ -187,46 +160,6 @@ async function snapshot() {
       body: JSON.stringify({ photo, lat: last?.coords.latitude, lng: last?.coords.longitude }) });
   } catch {}
 }
-camBtn.onclick = startCam;
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && camStream && camStream.getVideoTracks()[0].readyState === "live") snapshot(); });
-
-// ---------- report an accident ----------
-const panel = document.getElementById("panel");
-let photoData = null;
-document.getElementById("open").onclick = () => panel.classList.remove("hide");
-document.getElementById("cancel").onclick = reset;
-function reset() {
-  panel.classList.add("hide"); photoData = null;
-  document.getElementById("prev").innerHTML = ""; document.getElementById("note").value = "";
-  document.getElementById("photo").value = ""; document.getElementById("imsg").textContent = "";
-}
-// photo + downscale in the browser
-document.getElementById("photo").onchange = (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  const img = new Image(); const url = URL.createObjectURL(f);
-  img.onload = () => {
-    const max = 1280, sc = Math.min(1, max / Math.max(img.width, img.height));
-    const c = document.createElement("canvas"); c.width = img.width * sc; c.height = img.height * sc;
-    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-    photoData = c.toDataURL("image/jpeg", 0.7);
-    URL.revokeObjectURL(url);
-    document.getElementById("prev").innerHTML = `<img src="${photoData}">`;
-  };
-  img.src = url;
-};
-document.getElementById("send").onclick = async () => {
-  const imsg = document.getElementById("imsg");
-  if (!photoData && !document.getElementById("note").value.trim()) { imsg.textContent = "Add a photo or a description."; return; }
-  imsg.textContent = "Submitting…";
-  try {
-    const r = await fetch(`/api/t/${token}/incident`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: document.getElementById("note").value, photo: photoData,
-        lat: last?.coords.latitude, lng: last?.coords.longitude })
-    });
-    if (!r.ok) throw 0;
-    imsg.textContent = "Submitted. Thank you."; setTimeout(reset, 1500);
-  } catch { imsg.textContent = "Couldn't submit, please try again."; }
-};
 </script>
 </body></html>
