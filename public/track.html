@@ -74,7 +74,7 @@ textarea{min-height:60px;resize:vertical}
   <div class="note" id="imsg"></div>
 </div>
 
-<div class="note">This page shares your location during working hours. A photo is only sent when you tap Submit.</div>
+<div class="note">Keep this screen on during your shift. Your location is shared during working hours. A photo is only sent when you tap Submit.</div>
 
 <script>
 const token = location.pathname.split("/").pop();
@@ -149,8 +149,14 @@ document.getElementById("retry").onclick = () => {
   );
 };
 async function keepAwake() { try { if ("wakeLock" in navigator && !wake) { wake = await navigator.wakeLock.request("screen"); wake.onrelease = () => wake = null; } } catch {} }
-document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && started && keepAwake());
-// sledovanie sa spustí až po potvrdení súhlasu (funkcia begin)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && started) {
+    keepAwake();
+    lastSent = 0;            // po návrate na stránku pošli polohu hneď
+    if (last) send(last);
+  }
+});
+// sledovanie sa spustí hneď po otvorení linku (funkcia begin)
 
 // ---------- vehicle camera (periodic photo, visible, during working hours) ----------
 let camStream = null, camTimer = null, camStarting = false;
