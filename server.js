@@ -286,8 +286,12 @@ function parseTs(v) {
 }
 function handleGps(req, res) {
   const q = { ...(req.query || {}), ...(req.body || {}) };
+  // otvorené v prehliadači bez údajov o polohe – priateľská správa, že endpoint žije
+  if (q.lat == null && q.lon == null && q.lng == null && q.longitude == null) {
+    return res.type("text").send("Tracking endpoint je aktívny. Túto adresu zadaj v aplikácii Traccar Client ako Server URL a pri nej Device identifier (kód kuriéra z admina).");
+  }
   const emp = getByToken.get(String(q.id || q.deviceid || ""));
-  if (!emp || !emp.active) return res.status(404).send("not found");
+  if (!emp || !emp.active) return res.status(404).send("neznámy kód kuriéra (Device ID)");
   const lat = Number(q.lat), lng = Number(q.lon ?? q.lng ?? q.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return res.status(400).send("bad position");
   const s = getSettings();
