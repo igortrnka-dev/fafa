@@ -393,7 +393,9 @@ app.put("/api/settings", (req, res) => {
   const { work_start, work_end, work_days, camera, camera_interval } = req.body || {};
   const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
   if (!hhmm.test(work_start || "") || !hhmm.test(work_end || "")) return res.status(400).json({ error: "Čas zadajte vo formáte HH:MM" });
+  if (work_start === work_end) return res.status(400).json({ error: "Začiatok a koniec pracovnej doby nemôžu byť rovnaké. Pre celodenné sledovanie zadajte 00:00 – 23:59." });
   const days = String(work_days || "").split(",").map((d) => d.trim()).filter((d) => /^[0-6]$/.test(d));
+  if (!days.length) return res.status(400).json({ error: "Vyberte aspoň jeden pracovný deň." });
   setSetting("work_start", work_start);
   setSetting("work_end", work_end);
   setSetting("work_days", days.join(","));
