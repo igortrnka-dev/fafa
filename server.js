@@ -163,8 +163,13 @@ app.use(express.json({ limit: "32kb" }));
 app.use(express.urlencoded({ extended: false }));
 
 const pub = (f) => path.join(__dirname, "public", f);
+// HTML stránky posielaj vždy čerstvé, nech prehliadač neukáže starú verziu po aktualizácii
+const sendPage = (res, file, status = 200) => {
+  res.set("Cache-Control", "no-cache, must-revalidate");
+  res.status(status).sendFile(pub(file));
+};
 
-app.get("/login", (req, res) => res.sendFile(pub("login.html")));
+app.get("/login", (req, res) => sendPage(res, "login.html"));
 app.post("/login", (req, res) => {
   if (!safeEqual(req.body.password || "", ADMIN_PASSWORD)) return res.redirect("/login?chyba=1");
   const secure = PUBLIC_URL.startsWith("https://") ? "; Secure" : "";
@@ -182,8 +187,8 @@ const BRAND_SLUG = (process.env.BRAND_SLUG || "t").replace(/[^a-zA-Z0-9_-]/g, ""
 const getByToken = db.prepare("SELECT id, name, active FROM employees WHERE token = ?");
 function serveTrack(req, res) {
   const emp = getByToken.get(req.params.token);
-  if (!emp || !emp.active) return res.status(404).sendFile(pub("neplatny.html"));
-  res.sendFile(pub("track.html"));
+  if (!emp || !emp.active) return sendPage(res, "neplatny.html", 404);
+  sendPage(res, "track.html");
 }
 app.get(`/${BRAND_SLUG}/:token`, serveTrack);
 if (BRAND_SLUG !== "t") app.get("/t/:token", serveTrack); // spätná kompatibilita starých linkov
@@ -254,7 +259,7 @@ app.post("/api/t/:token/snapshot", bigJson, (req, res) => {
 });
 
 // --- admin ---
-app.get("/", requireAdmin, (req, res) => res.sendFile(pub("admin.html")));
+app.get("/", requireAdmin, (req, res) => sendPage(res, "admin.html"));
 app.use("/api", requireAdmin);
 
 function baseUrl(req) {

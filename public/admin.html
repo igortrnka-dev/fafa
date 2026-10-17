@@ -15,6 +15,7 @@ header a{color:var(--muted);font-size:13px}
 .tabs button{flex:0 0 auto;white-space:nowrap;padding:12px 14px;border:0;background:none;font:inherit;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
 .tabs button.on{color:var(--accent);border-color:var(--accent);font-weight:600}
 .pane{overflow:auto;flex:1;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.pane[hidden]{display:none}
 .emp{border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;display:grid;grid-template-columns:12px 1fr;gap:4px 10px;align-items:center}
 .emp:hover{border-color:var(--accent)}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--off)}
