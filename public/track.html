@@ -27,9 +27,9 @@ textarea{min-height:60px;resize:vertical}
 #send{background:var(--accent);color:#fff}#cancel{background:var(--line);color:var(--fg)}
 .prev{display:grid;gap:8px}.prev img{max-width:100%;border-radius:8px}
 .note{font-size:12px;color:#6c766f;text-align:center;max-width:360px}
-#camflag{display:flex;align-items:center;gap:7px;color:#e06a6a;font-size:14px}
+#camflag{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));z-index:40}
 #camflag[hidden]{display:none}
-#camflag .rec{width:9px;height:9px;border-radius:50%;background:#e11;animation:blink 1.4s infinite}
+#camflag .rec{display:block;width:10px;height:10px;border-radius:50%;background:#e11;box-shadow:0 0 0 3px rgba(225,17,17,.18);animation:blink 1.4s infinite}
 @keyframes blink{50%{opacity:.25}}
 @keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 @media (prefers-reduced-motion:reduce){.check{animation:none}}
@@ -53,7 +53,7 @@ textarea{min-height:60px;resize:vertical}
 
 <div id="s">Starting…</div>
 
-<div id="camflag" hidden><span class="rec"></span>Vehicle camera recording</div>
+<div id="camflag" hidden title="Vehicle camera recording" aria-label="Vehicle camera recording"><span class="rec"></span></div>
 
 <!-- malý prvok kamery (bez veľkého náhľadu); indikátor vyššie viditeľne hlási, že kamera beží -->
 <video id="vid" autoplay muted playsinline style="width:1px;height:1px;opacity:0;pointer-events:none"></video>
