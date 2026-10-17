@@ -37,6 +37,15 @@ textarea{min-height:60px;resize:vertical}
   <button id="retry" style="background:var(--accent);color:#fff">Try again</button>
 </div>
 
+<div id="consent" style="position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:28px;text-align:center">
+  <div style="font-size:40px">🚚</div>
+  <div class="note" id="consentName" style="font-size:14px"></div>
+  <h1 style="font-size:20px;margin:0;max-width:360px">Before your shift</h1>
+  <p style="color:var(--muted);font-size:15px;line-height:1.5;max-width:360px">By tapping “I agree and continue”, you confirm that — in accordance with your signed employment contract — you consent to location tracking and photo documentation during your working hours.</p>
+  <button id="agree" style="background:var(--accent);color:#fff;width:100%;max-width:360px">I agree and continue</button>
+  <div class="note" style="max-width:360px">Your acknowledgement is recorded with the date and time.</div>
+</div>
+
 <div class="who" id="who"></div>
 
 <div class="confirm">
@@ -82,12 +91,26 @@ const el = document.getElementById("s");
 const say = (t, c = "") => { el.textContent = t; el.className = c; };
 let last = null, lastSent = 0, wake = null;
 
-let cfg = null;
+let cfg = null, started = false;
 fetch(`/api/t/${token}`).then(r => r.ok ? r.json() : null).then(d => {
-  cfg = d; if (!d) return;
+  cfg = d;
+  const consent = document.getElementById("consent");
+  if (!d) { consent.innerHTML = '<div style="font-size:19px;color:#e88">This link is not valid.</div>'; return; }
   document.getElementById("who").textContent = d.name;
-  if (d.camera) {
+  document.getElementById("consentName").textContent = d.name;
+  document.getElementById("agree").onclick = begin;
+});
+
+// courier taps "I agree and continue": log consent, then request location + camera within the same tap
+function begin() {
+  if (started) return; started = true;
+  fetch(`/api/t/${token}/consent`, { method: "POST" }).catch(() => {});
+  document.getElementById("consent").hidden = true;
+  keepAwake();
+  start();
+  if (cfg?.camera) {
     document.getElementById("cam").classList.remove("hide");
+    startCam();
     // if the camera is required but not running, keep reminding
     setInterval(() => {
       if (!camStream || camStream.getVideoTracks()[0]?.readyState !== "live") {
@@ -99,7 +122,7 @@ fetch(`/api/t/${token}`).then(r => r.ok ? r.json() : null).then(d => {
       }
     }, 5000);
   }
-});
+}
 
 async function send(p) {
   const now = Date.now();
@@ -136,9 +159,8 @@ document.getElementById("retry").onclick = () => {
   );
 };
 async function keepAwake() { try { if ("wakeLock" in navigator && !wake) { wake = await navigator.wakeLock.request("screen"); wake.onrelease = () => wake = null; } } catch {} }
-document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && keepAwake());
-document.addEventListener("click", keepAwake);
-keepAwake(); start();
+document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && started && keepAwake());
+// sledovanie sa spustí až po potvrdení súhlasu (funkcia begin)
 
 // ---------- vehicle camera (periodic photo, visible, during working hours) ----------
 let camStream = null, camTimer = null;

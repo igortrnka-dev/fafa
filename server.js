@@ -70,6 +70,15 @@ db.exec(`
     FOREIGN KEY (employee_id) REFERENCES employees(id)
   );
   CREATE INDEX IF NOT EXISTS idx_snap_emp_time ON snapshots(employee_id, created_at);
+  CREATE TABLE IF NOT EXISTS consents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    ip TEXT,
+    user_agent TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_consent_emp_time ON consents(employee_id, created_at);
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -199,6 +208,14 @@ app.get("/api/t/:token", (req, res) => {
   res.json({ name: emp.name, work_start: s.work_start, work_end: s.work_end, work_days: s.work_days,
     work_time: isWorkTime(s), camera: s.camera === "1", camera_interval: Math.max(20, Number(s.camera_interval) || 60) });
 });
+// záznam súhlasu kuriéra (kliknutie na Súhlasím pri otvorení linku) – dôkaz s časom a IP
+const insertConsent = db.prepare("INSERT INTO consents(employee_id, ip, user_agent, created_at) VALUES (?, ?, ?, ?)");
+app.post("/api/t/:token/consent", (req, res) => {
+  const emp = getByToken.get(req.params.token);
+  if (!emp || !emp.active) return res.status(404).json({ error: "not_found" });
+  insertConsent.run(emp.id, clientIp(req), String(req.headers["user-agent"] || "").slice(0, 300), Date.now());
+  res.json({ ok: true });
+});
 function clientIp(req) {
   return (req.ip || "").replace(/^::ffff:/, "") || null;
 }
@@ -321,11 +338,13 @@ app.get("/api/live", (req, res) => {
     camera_interval: Math.max(20, Number(s.camera_interval) || 60),
     employees: rows.map((r) => {
       const snap = db.prepare("SELECT id, created_at FROM snapshots WHERE employee_id = ? ORDER BY created_at DESC LIMIT 1").get(r.id);
+      const consent = db.prepare("SELECT created_at FROM consents WHERE employee_id = ? ORDER BY created_at DESC LIMIT 1").get(r.id);
       return {
         ...r,
         status: r.recorded_at == null ? "none" : now - r.recorded_at < ONLINE_SECONDS * 1000 ? "online" : "stale",
         snapshot: snap ? `/api/snapshots/${snap.id}/img` : null,
         snapshot_at: snap ? snap.created_at : null,
+        consent_at: consent ? consent.created_at : null,
       };
     }),
   });
