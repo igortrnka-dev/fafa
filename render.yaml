@@ -16,6 +16,8 @@ services:
         generateValue: true   # Render vygeneruje dlhý náhodný kľúč
       - key: PUBLIC_URL
         sync: false           # sem dáš verejnú adresu služby, napr. https://kde-su-kurieri.onrender.com
+      - key: BRAND_SLUG
+        value: deliveryverification
       - key: DB_PATH
         value: /var/data/poloha.sqlite
       - key: NODE_VERSION

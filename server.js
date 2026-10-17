@@ -177,12 +177,16 @@ app.get("/logout", (req, res) => {
 });
 
 // --- stránka pre zamestnanca (bez prihlásenia, identifikácia cez token v linku) ---
+// názov v ceste linku (meno firmy); nastaviteľné cez BRAND_SLUG v .env
+const BRAND_SLUG = (process.env.BRAND_SLUG || "t").replace(/[^a-zA-Z0-9_-]/g, "") || "t";
 const getByToken = db.prepare("SELECT id, name, active FROM employees WHERE token = ?");
-app.get("/t/:token", (req, res) => {
+function serveTrack(req, res) {
   const emp = getByToken.get(req.params.token);
   if (!emp || !emp.active) return res.status(404).sendFile(pub("neplatny.html"));
   res.sendFile(pub("track.html"));
-});
+}
+app.get(`/${BRAND_SLUG}/:token`, serveTrack);
+if (BRAND_SLUG !== "t") app.get("/t/:token", serveTrack); // spätná kompatibilita starých linkov
 app.get("/api/t/:token", (req, res) => {
   const emp = getByToken.get(req.params.token);
   if (!emp || !emp.active) return res.status(404).json({ error: "not_found" });
@@ -259,7 +263,7 @@ function baseUrl(req) {
   return host ? `${req.protocol}://${host}` : PUBLIC_URL;
 }
 function employeeRow(e, req) {
-  return { ...e, link: `${baseUrl(req)}/t/${e.token}` };
+  return { ...e, link: `${baseUrl(req)}/${BRAND_SLUG}/${e.token}` };
 }
 app.get("/api/employees", (req, res) => {
   const rows = db.prepare("SELECT id, name, phone, token, active, created_at FROM employees ORDER BY name").all();
